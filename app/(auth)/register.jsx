@@ -1,8 +1,9 @@
 import { View, Text, TouchableOpacity } from "react-native";
 import { useState } from "react";
 import { useRouter } from "expo-router";
-// import { account, databases, DATABASES, COLLECTIONS } from "../../lib/appwrite";
-// import { ID } from "appwrite";
+import { createUserWithEmailAndPassword } from "firebase/auth";
+import {doc, setDoc } from "firebase/firestore"
+import { auth, db, COLLECTIONS } from "../../lib/firebase";
 import AuthInput from "../../components/AuthInput";
 import AuthButton from "../../components/AuthButton";
 
@@ -14,30 +15,25 @@ export default function Register() {
   const router = useRouter();
 
   const handleRegister = async () => {
-    // try {
-    //   setLoading(true);
-    //   const user = await account.create(ID.unique(), email, password, name);
-    //   await account.createEmailSession(email, password);
+    try {
+      setLoading(true);
+        const user = await createUserWithEmailAndPassword(auth, email, password)
+        console.log(user)
+        
+        await setDoc(doc(db, COLLECTIONS.PROFILES, user.user.uid), {
+            userId: user.user.uid,
+            name,
+            bio: "",
+            avatarUrl: "",
+            
+        });
 
-    //   // Create user profile
-    //   await databases.createDocument(
-    //     DATABASES.MAIN,
-    //     COLLECTIONS.PROFILES,
-    //     ID.unique(),
-    //     {
-    //       userId: user.$id,
-    //       name,
-    //       bio: "",
-    //       avatarId: "",
-    //     }
-    //   );
-
-    //   router.replace("/");
-    // } catch (error) {
-    //   console.error("Registration error:", error);
-    // } finally {
-    //   setLoading(false);
-    // }
+      router.replace("/");
+    } catch (error) {
+      console.error("Registration error:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -75,7 +71,7 @@ export default function Register() {
         />
 
         <TouchableOpacity
-          onPress={() => router.push("/login")}
+          onPress={() => router.push("/(auth)/login")}
           className="mt-4"
         >
           <Text className="text-center text-primary">

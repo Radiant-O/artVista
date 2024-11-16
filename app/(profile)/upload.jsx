@@ -1,97 +1,115 @@
-import { View, Text, Image, TouchableOpacity, ScrollView } from "react-native";
-import { useState, useEffect } from "react";
+import { View, Text, TextInput, TouchableOpacity, Image } from "react-native";
+import { useState } from "react";
 import { useRouter } from "expo-router";
+import * as ImagePicker from "expo-image-picker";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { account, databases, DATABASES, COLLECTIONS } from "../../lib/appwrite";
-import ArtworkCard from "../../components/ArtworkCard";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { collection, addDoc } from "firebase/firestore";
+import { auth, storage, db, COLLECTIONS } from "../../lib/firebase";
 
-export default function Profile() {
-  const [profile, setProfile] = useState(null);
-  const [userArtworks, setUserArtworks] = useState([]);
+export default function UploadArtwork() {
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [tags, setTags] = useState("");
+  const [image, setImage] = useState(null);
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
 
-  useEffect(() => {
-    fetchProfile();
-    fetchUserArtworks();
-  }, []);
+  const pickImage = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 1,
+    });
 
-  const fetchProfile = async () => {
-    try {
-      const user = await account.get();
-      const profileData = await databases.listDocuments(
-        DATABASES.MAIN,
-        COLLECTIONS.PROFILES,
-        [databases.equal("userId", user.$id)]
-      );
-      setProfile(profileData.documents[0]);
-    } catch (error) {
-      console.error("Error fetching profile:", error);
+    if (!result.canceled) {
+      setImage(result.assets[0].uri);
     }
   };
 
-  const fetchUserArtworks = async () => {
-    try {
-      const user = await account.get();
-      const artworks = await databases.listDocuments(
-        DATABASES.MAIN,
-        COLLECTIONS.ARTWORKS,
-        [databases.equal("artistId", user.$id)]
-      );
-      setUserArtworks(artworks.documents);
-    } catch (error) {
-      console.error("Error fetching user artworks:", error);
+  const handleUpload = async () => {
+    if (!auth.currentUser) {
+      alert("Please login first");
+      return;
     }
-  };
 
-  const handleLogout = async () => {
     try {
-      await account.deleteSession("current");
-      router.replace("/auth/login");
+      setLoading(true);
+
+      const response = await fetch(image);
+      const blob = await response.blob();
+      const imageRef = ref(storage, `artworks/${Date.now()}`);
+      await uploadBytes(imageRef, blob);
+      const imageUrl = await getDownloadURL(imageRef);
+      await addDoc(collection(db, COLLECTIONS.ARTWORKS), {
+        title,
+        description,
+        imageUrl,
+        artistId: auth.currentUser.uid,
+        tags: tags.split(",").map((tag) => tag.trim()),
+        likes: 0,
+        createdAt: new Date().toISOString(),
+      });
+
+      router.back();
     } catch (error) {
-      console.error("Logout error:", error);
+      console.error("Upload error:", error.message);
+      alert(error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <ScrollView className="flex-1 bg-background">
-      <View className="bg-white p-6">
-        <View className="items-center">
-          <Image
-            source={{
-              uri: profile?.avatarId
-                ? `YOUR_APPWRITE_ENDPOINT/storage/files/${profile.avatarId}`
-                : "https://via.placeholder.com/100",
-            }}
-            className="w-24 h-24 rounded-full"
-          />
-          <Text className="text-xl font-bold mt-4">{profile?.name}</Text>
-          <Text className="text-gray-600 mt-2">
-            {profile?.bio || "No bio yet"}
-          </Text>
-        </View>
+    <View className="flex-1 bg-background p-4">
+      <TouchableOpacity
+        onPress={pickImage}
+        className="h-48 bg-white rounded-lg justify-center items-center mb-4"
+      >
+        {image ? (
+          <Image source={{ uri: image }} className="w-full h-full rounded-lg" />
+        ) : (
+          <MaterialCommunityIcons name="image-plus" size={48} color="#4A90E2" />
+        )}
+      </TouchableOpacity>
+
+      <View className="bg-white p-4 rounded-lg">
+        <TextInput
+          placeholder="Title"
+          value={title}
+          onChangeText={setTitle}
+          className="border-b border-gray-200 p-2 mb-4"
+        />
+
+        <TextInput
+          placeholder="Description"
+          value={description}
+          onChangeText={setDescription}
+          multiline
+          numberOfLines={4}
+          className="border-b border-gray-200 p-2 mb-4"
+        />
+
+        <TextInput
+          placeholder="Tags (comma-separated)"
+          value={tags}
+          onChangeText={setTags}
+          className="border-b border-gray-200 p-2 mb-4"
+        />
 
         <TouchableOpacity
-          onPress={handleLogout}
-          className="mt-6 flex-row items-center justify-center"
+          onPress={handleUpload}
+          disabled={loading || !image}
+          className={`bg-primary p-4 rounded-lg ${
+            !image || loading ? "opacity-50" : ""
+          }`}
         >
-          <MaterialCommunityIcons name="logout" size={20} color="#F2994A" />
-          <Text className="ml-2 text-secondary">Logout</Text>
+          <Text className="text-white text-center font-bold">
+            {loading ? "Uploading..." : "Upload Artwork"}
+          </Text>
         </TouchableOpacity>
       </View>
-
-      <View className="p-4">
-        <Text className="text-xl font-bold mb-4">My Artworks</Text>
-        <View className="flex-row flex-wrap justify-between">
-          {userArtworks.map((artwork) => (
-            <ArtworkCard
-              key={artwork.$id}
-              artwork={artwork}
-              onPress={() => router.push(`/artwork/${artwork.$id}`)}
-              isGridView={true}
-            />
-          ))}
-        </View>
-      </View>
-    </ScrollView>
+    </View>
   );
 }

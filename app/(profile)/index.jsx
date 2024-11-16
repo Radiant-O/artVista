@@ -1,56 +1,87 @@
-import { View, Text, Image, TouchableOpacity, ScrollView } from "react-native";
+import {
+  View,
+  Text,
+  Image,
+  TouchableOpacity,
+  ScrollView,
+  ActivityIndicator,
+} from "react-native";
 import { useState, useEffect } from "react";
 import { useRouter } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { account, databases, DATABASES, COLLECTIONS } from "../../lib/appwrite";
+import { signOut } from "firebase/auth";
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  doc,
+  getDoc,
+} from "firebase/firestore";
+import { auth, db, COLLECTIONS } from "../../lib/firebase";
 import ArtworkCard from "../../components/ArtworkCard";
 
 export default function Profile() {
   const [profile, setProfile] = useState(null);
   const [userArtworks, setUserArtworks] = useState([]);
+  const [loading, setLoading] = useState(true);
   const router = useRouter();
 
   useEffect(() => {
-    fetchProfile();
-    fetchUserArtworks();
+    if (!auth.currentUser) {
+      router.replace("/(auth)/login");
+      return;
+    }
+
+    const fetchProfileAndArtworks = async () => {
+      try {
+        // Fetch user profile
+        const profileDoc = await getDoc(
+          doc(db, COLLECTIONS.PROFILES, auth.currentUser.uid)
+        );
+        if (profileDoc.exists()) {
+          setProfile({ id: profileDoc.id, ...profileDoc.data() });
+        }
+
+        // Fetch user artworks
+        const artworksQuery = query(
+          collection(db, COLLECTIONS.ARTWORKS),
+          where("artistId", "==", auth.currentUser.uid)
+        );
+        const artworksSnapshot = await getDocs(artworksQuery);
+        const artworksList = artworksSnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+        setUserArtworks(artworksList);
+      } catch (error) {
+        console.error("Error fetching profile:", error);
+        alert("Error loading profile data");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProfileAndArtworks();
   }, []);
-
-  const fetchProfile = async () => {
-    try {
-      const user = await account.get();
-      const profileData = await databases.listDocuments(
-        DATABASES.MAIN,
-        COLLECTIONS.PROFILES,
-        [databases.equal("userId", user.$id)]
-      );
-      setProfile(profileData.documents[0]);
-    } catch (error) {
-      console.error("Error fetching profile:", error);
-    }
-  };
-
-  const fetchUserArtworks = async () => {
-    try {
-      const user = await account.get();
-      const artworks = await databases.listDocuments(
-        DATABASES.MAIN,
-        COLLECTIONS.ARTWORKS,
-        [databases.equal("artistId", user.$id)]
-      );
-      setUserArtworks(artworks.documents);
-    } catch (error) {
-      console.error("Error fetching user artworks:", error);
-    }
-  };
 
   const handleLogout = async () => {
     try {
-      await account.deleteSession("current");
-      router.replace("/auth/login");
+      await signOut(auth);
+      router.replace("/(auth)/login");
     } catch (error) {
       console.error("Logout error:", error);
+      alert("Error logging out");
     }
   };
+
+  if (loading) {
+    return (
+      <View className="flex-1 justify-center items-center">
+        <ActivityIndicator size="large" color="#4A90E2" />
+      </View>
+    );
+  }
 
   return (
     <ScrollView className="flex-1 bg-background">
@@ -58,9 +89,7 @@ export default function Profile() {
         <View className="items-center">
           <Image
             source={{
-              uri: profile?.avatarId
-                ? `YOUR_APPWRITE_ENDPOINT/storage/files/${profile.avatarId}`
-                : "https://via.placeholder.com/100",
+              uri: profile?.avatarUrl || "https://via.placeholder.com/100",
             }}
             className="w-24 h-24 rounded-full"
           />
@@ -68,6 +97,13 @@ export default function Profile() {
           <Text className="text-gray-600 mt-2">
             {profile?.bio || "No bio yet"}
           </Text>
+
+          <TouchableOpacity
+            onPress={() => router.push("/(profile)/edit")}
+            className="mt-4 bg-gray-100 px-4 py-2 rounded-lg"
+          >
+            <Text className="text-primary">Edit Profile</Text>
+          </TouchableOpacity>
         </View>
 
         <TouchableOpacity
@@ -84,9 +120,9 @@ export default function Profile() {
         <View className="flex-row flex-wrap justify-between">
           {userArtworks.map((artwork) => (
             <ArtworkCard
-              key={artwork.$id}
+              key={artwork.id}
               artwork={artwork}
-              onPress={() => router.push(`/artwork/${artwork.$id}`)}
+              onPress={() => router.push(`/(artwork)/${artwork.id}`)}
               isGridView={true}
             />
           ))}

@@ -21,12 +21,13 @@ export default function Layout() {
             title: "ArtVista",
           }}
         />
-        {/* <Stack.Screen
-          name="artwork/[id]"
+       
+        <Stack.Screen
+          name="(artwork)/[id]"
           options={{
             title: "Artwork Details",
           }}
-        /> */}
+        />
         <Stack.Screen
           name="(auth)/login"
           options={{
@@ -39,18 +40,24 @@ export default function Layout() {
             title: "Register",
           }}
         />
-        {/* <Stack.Screen
-          name="profile/upload"
+        <Stack.Screen
+          name="(profile)/upload"
           options={{
             title: "Upload Artwork",
           }}
         />
         <Stack.Screen
-          name="profile/index"
+          name="(profile)/edit"
+          options={{
+            title: "Edit",
+          }}
+        />
+        <Stack.Screen
+          name="(profile)/index"
           options={{
             title: "My Profile",
           }} 
-        />*/}
+        />
       </Stack>
     </GestureHandlerRootView>
   );

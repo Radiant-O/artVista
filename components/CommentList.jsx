@@ -6,54 +6,61 @@ import {
   FlatList,
 } from "react-native";
 import { useState, useEffect } from "react";
-// import { databases, DATABASES, COLLECTIONS } from "../lib/appwrite";
-// import { ID } from "appwrite";
+import {
+  collection,
+  query,
+  where,
+  orderBy,
+  addDoc,
+  onSnapshot,
+} from "firebase/firestore";
+import { auth, db, COLLECTIONS } from "../lib/firebase";
 
 export default function CommentList({ artworkId }) {
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState("");
   const [loading, setLoading] = useState(false);
 
-//   useEffect(() => {
-//     fetchComments();
-//   }, [artworkId]);
+  useEffect(() => {
+    if (!artworkId) return;
 
-//   const fetchComments = async () => {
-//     try {
-//       const response = await databases.listDocuments(
-//         DATABASES.MAIN,
-//         COLLECTIONS.COMMENTS,
-//         [databases.equal("artworkId", artworkId)]
-//       );
-//       setComments(response.documents);
-//     } catch (error) {
-//       console.error("Error fetching comments:", error);
-//     }
-//   };
+    const q = query(
+      collection(db, COLLECTIONS.COMMENTS),
+      where("artworkId", "==", artworkId),
+      orderBy("createdAt", "desc")
+    );
 
-//   const handleAddComment = async () => {
-//     if (!newComment.trim()) return;
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const commentsList = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      setComments(commentsList);
+    });
 
-//     try {
-//       setLoading(true);
-//       await databases.createDocument(
-//         DATABASES.MAIN,
-//         COLLECTIONS.COMMENTS,
-//         ID.unique(),
-//         {
-//           artworkId,
-//           content: newComment,
-//           createdAt: new Date().toISOString(),
-//         }
-//       );
-//       setNewComment("");
-//       fetchComments();
-//     } catch (error) {
-//       console.error("Error adding comment:", error);
-//     } finally {
-//       setLoading(false);
-//     }
-//   };
+    return () => unsubscribe();
+  }, [artworkId]);
+
+    const handleAddComment = async () => {
+      if (!newComment.trim() || !auth.currentUser) return;
+
+      try {
+        setLoading(true);
+        await addDoc(collection(db, COLLECTIONS.COMMENTS), {
+          artworkId,
+          userId: auth.currentUser.uid,
+          content: newComment,
+          createdAt: new Date().toISOString(),
+        });
+        setNewComment("");
+      } catch (error) {
+        console.error("Error adding comment:", error.message);
+        alert(error.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
 
   return (
     <View className="bg-white p-4 mt-2">
@@ -68,7 +75,7 @@ export default function CommentList({ artworkId }) {
         />
         <TouchableOpacity
           onPress={handleAddComment}
-          disabled={loading}
+          disabled={loading || !auth.currentUser}
           className={`bg-primary px-4 rounded-lg justify-center ${
             loading ? "opacity-50" : ""
           }`}

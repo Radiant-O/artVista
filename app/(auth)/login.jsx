@@ -1,7 +1,8 @@
 import { View, Text, TextInput, TouchableOpacity } from "react-native";
 import { useState } from "react";
 import { useRouter } from "expo-router";
-// import { account } from "../../lib/appwrite";
+import { signInWithEmailAndPassword } from "firebase/auth";
+import { auth } from "../../lib/firebase";
 import AuthInput from "../../components/AuthInput";
 import AuthButton from "../../components/AuthButton";
 
@@ -12,15 +13,16 @@ export default function Login() {
   const router = useRouter();
 
   const handleLogin = async () => {
-    // try {
-    //   setLoading(true);
-    //   await account.createEmailSession(email, password);
-    //   router.replace("/");
-    // } catch (error) {
-    //   console.error("Login error:", error);
-    // } finally {
-    //   setLoading(false);
-    // }
+    try {
+      setLoading(true);
+      await signInWithEmailAndPassword(auth, email, password)
+      router.replace("/");
+    } catch (error) {
+        console.error("Login error:", error);
+        alert(error.message)
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -48,7 +50,7 @@ export default function Login() {
         <AuthButton title="Login" onPress={handleLogin} loading={loading} />
 
         <TouchableOpacity
-          onPress={() => router.push("/register")}
+          onPress={() => router.push("(auth)/register")}
           className="mt-4"
         >
           <Text className="text-center text-primary">
